@@ -1,0 +1,203 @@
+	<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta name="google-site-verification" content="FeUdZyUasHd8gHnlYPo-_lioDOW1GDpogWBM21P929Y" />
+  <meta charset="UTF-8" />
+  <meta name="description" content="Découvrez Globaya, mon site web personnel avec des tutoriels et infos sur le voyage.">
+  <meta name="keywords" content="globaya, site web, voyages, voyage, Globaya, facile"/>
+  <title>GLOBAYA - Explorez sans limites</title>
+  <link rel="sitemap" href="/sitemap.xml" />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* RESET */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Outfit', sans-serif;
+      background: radial-gradient(circle at top left, #1b1b3a, #121212);
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    header {
+      width: 100%;
+      height: 100vh;
+      background: linear-gradient(145deg, #1f1f4a, #0d0d23);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    header h1 {
+      font-size: 3.5rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, #ff6a00, #ff99cc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: fadeInDown 1.2s ease-out;
+    }
+
+    header p {
+      font-size: 1.3rem;
+      margin-top: 20px;
+      max-width: 600px;
+      color: #ccc;
+      animation: fadeIn 2s ease-in;
+    }
+
+    .cta-buttons {
+      margin-top: 40px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .cta-buttons a {
+      padding: 14px 32px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border-radius: 30px;
+      background: linear-gradient(145deg, #ff6a00, #ff99cc);
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 0 10px 30px rgba(255, 105, 135, 0.3);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .cta-buttons a:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(255, 105, 135, 0.5);
+    }
+
+    section.features {
+      background: #121212;
+      padding: 80px 20px;
+      text-align: center;
+    }
+
+    section.features h2 {
+      font-size: 2.5rem;
+      margin-bottom: 30px;
+      color: #ff99cc;
+    }
+
+    .feature-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 30px;
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    .feature {
+      background: #1f1f1f;
+      padding: 30px;
+      border-radius: 16px;
+      border: 1px solid #2c2c2c;
+      transition: transform 0.3s ease, border 0.3s ease;
+    }
+
+    .feature:hover {
+      transform: translateY(-10px);
+      border-color: #ff6a00;
+    }
+
+    .feature h3 {
+      font-size: 1.5rem;
+      color: #ffa07a;
+      margin-bottom: 15px;
+    }
+
+    .feature p {
+      font-size: 1rem;
+      color: #bbb;
+    }
+
+    footer {
+      text-align: center;
+      padding: 40px 20px;
+      background: #0d0d0d;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @media (max-width: 768px) {
+      header h1 {
+        font-size: 2.5rem;
+      }
+      header p {
+        font-size: 1.1rem;
+      }
+      .cta-buttons a {
+        padding: 12px 24px;
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Bienvenue sur Globaya</h1>
+    <p>Explorez, découvrez et interagissez avec le monde comme jamais auparavant. GLOBAYA est votre compagnon de voyage numérique.</p>
+    <div class="cta-buttons">
+      <a href="Tuto.html">Comment ça marche</a>
+      <a href="Globaya.html">Commencer maintenant</a>
+    </div>
+  </header>
+
+  <section id="tutoriel" class="features">
+    <h2>Pourquoi utiliser GLOBAYA ?</h2>
+    <div class="feature-list">
+      <div class="feature">
+        <h3>Tutoriel</h3>
+
+        <p>Sélectionnez une catégorie dans le menu en haut pour afficher les lieux correspondants sur la carte.
+Cliquez sur un point pour obtenir plus d’informations et un lien vers le site officiel.
+Utilisez la carte pour explorer facilement les activités, hôtels et aéroports proches de vous.
+        </p>
+      </div>
+      <div class="feature">
+        <h3>Utilité</h3>
+
+        <p>Nomadia vous offre une navigation intuitive et rapide pour découvrir les meilleurs endroits où séjourner et visiter.
+Notre interface claire et moderne vous guide facilement, où que vous soyez.
+Bénéficiez d’informations à jour et fiables pour organiser vos voyages sans stress.</p>
+      </div>
+      <div class="feature">
+        <h3>Démarrer</h3>
+
+        <p>Accédez à votre première aventure en cliquant sur "Commencer". Simple, rapide, efficace.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    &copy; 2025 GLOBAYA. Tous droits réservés.
+  </footer>
+
+</body>
+</html>

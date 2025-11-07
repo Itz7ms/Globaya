@@ -1,0 +1,1206 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Globaya - Carte Interactive</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    /* RESET */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Outfit', sans-serif;
+      background: #121212;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .map-container {
+      width: 100%;
+      height: 100vh;
+      position: relative;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #1f1f1f;
+    }
+    
+    .dropdown-home {
+  display: block;
+  color: #ffffff;
+  font-weight: bold;
+  text-decoration: none;
+  padding: 10px 16px;
+  transition: background-color 0.3s ease;
+}
+
+.dropdown-home:hover {
+  background-color: #e8f5e9;
+}
+
+/* Ligne séparatrice sous le bouton Accueil */
+.dropdown-separator {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 5px 0;
+}
+
+    .dropdown-container {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+    }
+
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-button {
+      padding: 12px 24px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      background: #2c2c2c;
+      color: #ffffff;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .dropdown-button:hover {
+      background: #ff6a00;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background: #1f1f1f;
+      min-width: 220px;
+      border-radius: 8px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      z-index: 1;
+      top: 100%;
+      left: 0;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    .dropdown-content .section {
+      padding: 12px 16px;
+      font-size: 1rem;
+      color: #fff;
+      background: #2c2c2c;
+      border-bottom: 1px solid #3c3c3c;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .dropdown-content .section:hover {
+      background: #ff6a00;
+    }
+
+    .dropdown-content .countries {
+      display: none;
+      padding-left: 20px;
+      background: #1a1a1a;
+    }
+
+    .dropdown-content .countries.show {
+      display: block;
+    }
+
+    .dropdown-content .country {
+      padding: 10px 20px;
+      font-size: 0.9rem;
+      color: #ccc;
+      cursor: pointer;
+    }
+
+    .dropdown-content .country:hover {
+      background: #ff99cc;
+      color: #fff;
+    }
+
+    .dropdown-content .cities {
+      display: none;
+      padding-left: 30px;
+      background: #252525;
+    }
+
+    .dropdown-content .cities.show {
+      display: block;
+    }
+
+    .dropdown-content .city {
+      padding: 8px 30px;
+      font-size: 0.85rem;
+      color: #ddd;
+      cursor: pointer;
+    }
+
+    .dropdown-content .city:hover {
+      background: #ff99cc;
+      color: #fff;
+    }
+
+    .dropdown-content .items {
+      display: none;
+      padding-left: 40px;
+      background: #1a1a1a;
+    }
+
+    .dropdown-content .items.show {
+      display: block;
+    }
+
+    .dropdown-content .item {
+      padding: 8px 40px;
+      font-size: 0.8rem;
+      color: #bbb;
+      cursor: pointer;
+    }
+
+    .dropdown-content .item:hover {
+      background: #ff99cc;
+      color: #fff;
+    }
+
+    /* Custom popup styling */
+    .leaflet-popup-content-wrapper {
+      background: #1f1f1f;
+      color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .leaflet-popup-content {
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.9rem;
+      padding: 10px;
+    }
+
+    .leaflet-popup-content a {
+      color: #ff6a00;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .leaflet-popup-content a:hover {
+      color: #ff99cc;
+    }
+
+    .leaflet-popup-tip {
+      background: #1f1f1f;
+    }
+
+    @media (max-width: 768px) {
+      .dropdown-button {
+        padding: 10px 20px;
+        font-size: 1rem;
+      }
+      .dropdown-content {
+        min-width: 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="map-container">
+    <div class="dropdown-container">
+      <div class="dropdown">
+        <button class="dropdown-button" aria-haspopup="true" aria-expanded="false">Explorer</button>
+        <div class="dropdown-content" id="main-dropdown">
+          <a href="index.html" class="dropdown-home">🏠 Accueil</a>
+          <hr class="dropdown-separator">
+          <div class="section" data-id="hotels">Hôtels</div>
+          <div class="countries" id="hotels-countries">
+            <div class="country" data-id="france-hotels" data-coords="48.8566,2.3522">France</div>
+            <div class="cities" id="france-hotels-cities">
+              <div class="city" data-id="paris-hotels" data-coords="48.8566,2.3522">Paris</div>
+              <div class="items" id="paris-hotels-items">
+                <div class="item" data-coords="48.8719,2.3316" data-type="hotel" data-url="https://www.plaza-athenee-paris.com">Hôtel Plaza Athénée</div>
+                <div class="item" data-coords="48.8656,2.3212" data-type="hotel" data-url="https://www.lebristolparis.com">Le Bristol Paris</div>
+                <div class="item" data-coords="48.8704,2.3004" data-type="hotel" data-url="https://www.fourseasons.com/paris">Four Seasons Hotel George V</div>
+                <div class="item" data-coords="48.8667,2.3208" data-type="hotel" data-url="https://www.shangri-la.com/paris">Shangri-La Paris</div>
+              </div>
+              <div class="city" data-id="lyon-hotels" data-coords="45.7640,4.8357">Lyon</div>
+              <div class="items" id="lyon-hotels-items">
+                <div class="item" data-coords="45.7580,4.8300" data-type="hotel" data-url="https://www.ihg.com/intercontinental/hotels/fr/fr/lyon/lysha/hoteldetail">InterContinental Lyon</div>
+                <div class="item" data-coords="45.7475,4.8198" data-type="hotel" data-url="https://www.villa-florentine.com">Villa Florentine</div>
+                <div class="item" data-coords="45.7539,4.8330" data-type="hotel" data-url="https://www.sofitel-lyon-bellecour.com">Sofitel Lyon Bellecour</div>
+              </div>
+              <div class="city" data-id="marseille-hotels" data-coords="43.2965,5.3698">Marseille</div>
+              <div class="items" id="marseille-hotels-items">
+                <div class="item" data-coords="43.2948,5.3736" data-type="hotel" data-url="https://www.sofitel.com/fr-fr/hotel/0553-sofitel-marseille-vieux-port">Sofitel Marseille</div>
+                <div class="item" data-coords="43.2976,5.3678" data-type="hotel" data-url="https://www.ihg.com/intercontinental/hotels/fr/fr/marseille/mrsha/hoteldetail">InterContinental Marseille</div>
+                <div class="item" data-coords="43.2920,5.3580" data-type="hotel" data-url="https://www.nh-hotels.com/en/hotels/france/marseille/nh-collection-marseille">NH Collection Marseille</div>
+              </div>
+              <div class="city" data-id="nice-hotels" data-coords="43.7031,7.2661">Nice</div>
+              <div class="items" id="nice-hotels-items">
+                <div class="item" data-coords="43.6987,7.2697" data-type="hotel" data-url="https://www.hotelnice.fr">Hôtel Negresco</div>
+                <div class="item" data-coords="43.6970,7.2650" data-type="hotel" data-url="https://www.hyatt.com/en-US/hotel/france/hyatt-regency-nice-palais-de-la-mediterranee">Hyatt Regency Nice</div>
+                <div class="item" data-coords="43.7012,7.2680" data-type="hotel" data-url="https://www.leroyalnice.com">Le Méridien Nice</div>
+              </div>
+            </div>
+            <div class="country" data-id="etats-unis-hotels" data-coords="40.7128,-74.0060">États-Unis</div>
+            <div class="cities" id="etats-unis-hotels-cities">
+              <div class="city" data-id="new-york-hotels" data-coords="40.7128,-74.0060">New York</div>
+              <div class="items" id="new-york-hotels-items">
+                <div class="item" data-coords="40.7614,-73.9776" data-type="hotel" data-url="https://www.theplazany.com">The Plaza Hotel</div>
+                <div class="item" data-coords="40.7648,-73.9747" data-type="hotel" data-url="https://www.mandarinoriental.com/new-york">Mandarin Oriental New York</div>
+                <div class="item" data-coords="40.7550,-73.9860" data-type="hotel" data-url="https://www.hilton.com/en/hotels/nycmhwh-hilton-midtown">Hilton Midtown</div>
+              </div>
+              <div class="city" data-id="los-angeles-hotels" data-coords="34.0522,-118.2437">Los Angeles</div>
+              <div class="items" id="los-angeles-hotels-items">
+                <div class="item" data-coords="34.0584,-118.4192" data-type="hotel" data-url="https://www.beverlyhillshotel.com">Beverly Hills Hotel</div>
+                <div class="item" data-coords="34.0677,-118.3988" data-type="hotel" data-url="https://www.fourseasons.com/losangeles">Four Seasons Los Angeles</div>
+                <div class="item" data-coords="34.0507,-118.2550" data-type="hotel" data-url="https://www.thewestinbonaventure.com">The Westin Bonaventure</div>
+              </div>
+              <div class="city" data-id="chicago-hotels" data-coords="41.8781,-87.6298">Chicago</div>
+              <div class="items" id="chicago-hotels-items">
+                <div class="item" data-coords="41.8898,-87.6227" data-type="hotel" data-url="https://www.thelanghamhotels.com/en/the-langham-chicago">The Langham Chicago</div>
+                <div class="item" data-coords="41.8888,-87.6244" data-type="hotel" data-url="https://www.peninsulachicago.com">The Peninsula Chicago</div>
+                <div class="item" data-coords="41.8849,-87.6321" data-type="hotel" data-url="https://www.hilton.com/en/hotels/chidwhh-hilton-chicago">Hilton Chicago</div>
+              </div>
+              <div class="city" data-id="san-francisco-hotels" data-coords="37.7749,-122.4194">San Francisco</div>
+              <div class="items" id="san-francisco-hotels-items">
+                <div class="item" data-coords="37.7937,-122.3965" data-type="hotel" data-url="https://www.fairmont.com/san-francisco">Fairmont San Francisco</div>
+                <div class="item" data-coords="37.7880,-122.4086" data-type="hotel" data-url="https://www.ritzcarlton.com/en/hotels/california/san-francisco">The Ritz-Carlton San Francisco</div>
+                <div class="item" data-coords="37.7864,-122.4133" data-type="hotel" data-url="https://www.hilton.com/en/hotels/sfofdhf-hilton-san-francisco-union-square">Hilton San Francisco</div>
+              </div>
+            </div>
+            <div class="country" data-id="japon-hotels" data-coords="35.6762,139.6503">Japon</div>
+            <div class="cities" id="japon-hotels-cities">
+              <div class="city" data-id="tokyo-hotels" data-coords="35.6762,139.6503">Tokyo</div>
+              <div class="items" id="tokyo-hotels-items">
+                <div class="item" data-coords="35.6733,139.7551" data-type="hotel" data-url="https://www.ritzcarlton.com/en/hotels/japan/tokyo">The Ritz-Carlton Tokyo</div>
+                <div class="item" data-coords="35.6605,139.7292" data-type="hotel" data-url="https://www.mandarinoriental.com/tokyo">Mandarin Oriental Tokyo</div>
+                <div class="item" data-coords="35.6866,139.6921" data-type="hotel" data-url="https://www.hilton.com/en/hotels/tyohitw-hilton-tokyo">Hilton Tokyo</div>
+              </div>
+              <div class="city" data-id="osaka-hotels" data-coords="34.6937,135.5023">Osaka</div>
+              <div class="items" id="osaka-hotels-items">
+                <div class="item" data-coords="34.6873,135.5246" data-type="hotel" data-url="https://www.swissotel.com/hotels/nankai-osaka">Swissôtel Nankai Osaka</div>
+                <div class="item" data-coords="34.6654,135.5018" data-type="hotel" data-url="https://www.ritzcarlton.com/en/hotels/japan/osaka">The Ritz-Carlton Osaka</div>
+                <div class="item" data-coords="34.6910,135.4990" data-type="hotel" data-url="https://www.hilton.com/en/hotels/osahihh-hilton-osaka">Hilton Osaka</div>
+              </div>
+            </div>
+            <div class="country" data-id="italie-hotels" data-coords="41.9028,12.4964">Italie</div>
+            <div class="cities" id="italie-hotels-cities">
+              <div class="city" data-id="rome-hotels" data-coords="41.9028,12.4964">Rome</div>
+              <div class="items" id="rome-hotels-items">
+                <div class="item" data-coords="41.9061,12.4831" data-type="hotel" data-url="https://www.roccofortehotels.com/hotels-and-resorts/hotel-de-russie">Hotel de Russie</div>
+                <div class="item" data-coords="41.9097,12.4769" data-type="hotel" data-url="https://www.hasslerroma.com">Hassler Roma</div>
+                <div class="item" data-coords="41.8902,12.4942" data-type="hotel" data-url="https://www.westinhotels.com/excelsiorrome">The Westin Excelsior Rome</div>
+              </div>
+              <div class="city" data-id="venise-hotels" data-coords="45.4408,12.3155">Venise</div>
+              <div class="items" id="venise-hotels-items">
+                <div class="item" data-coords="45.4333,12.3327" data-type="hotel" data-url="https://www.belmond.com/hotels/europe/italy/venice/belmond-hotel-cipriani">Belmond Hotel Cipriani</div>
+                <div class="item" data-coords="45.4356,12.3346" data-type="hotel" data-url="https://www.marriott.com/hotels/travel/vcegw-the-gritti-palace-a-luxury-collection-hotel-venice">The Gritti Palace</div>
+                <div class="item" data-coords="45.4325,12.3280" data-type="hotel" data-url="https://www.aman.com/resorts/aman-venice">Aman Venice</div>
+              </div>
+              <div class="city" data-id="florence-hotels" data-coords="43.7696,11.2558">Florence</div>
+              <div class="items" id="florence-hotels-items">
+                <div class="item" data-coords="43.7718,11.2486" data-type="hotel" data-url="https://www.fourseasons.com/florence">Four Seasons Florence</div>
+                <div class="item" data-coords="43.7680,11.2530" data-type="hotel" data-url="https://www.roccofortehotels.com/hotels-and-resorts/savoy-hotel">Hotel Savoy Florence</div>
+                <div class="item" data-coords="43.7745,11.2468" data-type="hotel" data-url="https://www.stregishotels.com/florence">The St. Regis Florence</div>
+              </div>
+              <div class="city" data-id="milan-hotels" data-coords="45.4642,9.1900">Milan</div>
+              <div class="items" id="milan-hotels-items">
+                <div class="item" data-coords="45.4681,9.1824" data-type="hotel" data-url="https://www.mandarinoriental.com/milan">Mandarin Oriental Milan</div>
+                <div class="item" data-coords="45.4667,9.1889" data-type="hotel" data-url="https://www.bulgarihotels.com/milan">Bulgari Hotel Milano</div>
+                <div class="item" data-coords="45.4723,9.1945" data-type="hotel" data-url="https://www.excelsiorhotelgallia.com">Excelsior Hotel Gallia</div>
+              </div>
+            </div>
+            <div class="country" data-id="bresil-hotels" data-coords="-22.9068,-43.1729">Brésil</div>
+            <div class="cities" id="bresil-hotels-cities">
+              <div class="city" data-id="rio-de-janeiro-hotels" data-coords="-22.9068,-43.1729">Rio de Janeiro</div>
+              <div class="items" id="rio-de-janeiro-hotels-items">
+                <div class="item" data-coords="-22.9707,-43.1822" data-type="hotel" data-url="https://www.belmond.com/hotels/south-america/brazil/rio-de-janeiro/belmond-copacabana-palace">Copacabana Palace</div>
+                <div class="item" data-coords="-22.9660,-43.1740" data-type="hotel" data-url="https://www.hilton.com/en/hotels/riohihh-hilton-rio-de-janeiro-copacabana">Hilton Rio de Janeiro</div>
+                <div class="item" data-coords="-22.9740,-43.1900" data-type="hotel" data-url="https://www.fasano.com.br/hoteis/fasano-rio-de-janeiro">Fasano Rio de Janeiro</div>
+              </div>
+              <div class="city" data-id="sao-paulo-hotels" data-coords="-23.5505,-46.6333">São Paulo</div>
+              <div class="items" id="sao-paulo-hotels-items">
+                <div class="item" data-coords="-23.5650,-46.6524" data-type="hotel" data-url="https://www.tivolihotels.com/en/tivoli-mofarrej-sao-paulo">Tivoli Mofarrej São Paulo</div>
+                <div class="item" data-coords="-23.5535,-46.6667" data-type="hotel" data-url="https://www.palaciotangara.com">Palácio Tangará</div>
+                <div class="item" data-coords="-23.5703,-46.6450" data-type="hotel" data-url="https://www.hilton.com/en/hotels/saomhhf-hilton-sao-paulo-morumbi">Hilton São Paulo Morumbi</div>
+              </div>
+              <div class="city" data-id="salvador-hotels" data-coords="-12.9714,-38.5014">Salvador</div>
+              <div class="items" id="salvador-hotels-items">
+                <div class="item" data-coords="-12.9600,-38.5100" data-type="hotel" data-url="https://www.fasano.com.br/hoteis/fasano-salvador">Fasano Salvador</div>
+                <div class="item" data-coords="-12.9750,-38.5150" data-type="hotel" data-url="https://www.wishhotels.com.br/hotel/wish-hotel-da-bahia">Wish Hotel da Bahia</div>
+                <div class="item" data-coords="-12.9620,-38.5050" data-type="hotel" data-url="https://www.mercure.com/fr/hotel/5318">Mercure Salvador Rio Vermelho</div>
+              </div>
+            </div>
+            <div class="country" data-id="espagne-hotels" data-coords="40.4168,-3.7038">Espagne</div>
+            <div class="cities" id="espagne-hotels-cities">
+              <div class="city" data-id="madrid-hotels" data-coords="40.4168,-3.7038">Madrid</div>
+              <div class="items" id="madrid-hotels-items">
+                <div class="item" data-coords="40.4200,-3.7050" data-type="hotel" data-url="https://www.fourseasons.com/madrid">Four Seasons Hotel Madrid</div>
+                <div class="item" data-coords="40.4150,-3.7010" data-type="hotel" data-url="https://www.ritzcarlton.com/en/hotels/spain/madrid">The Ritz Madrid</div>
+                <div class="item" data-coords="40.4190,-3.6900" data-type="hotel" data-url="https://www.mandarinoriental.com/ritz-madrid">Mandarin Oriental Ritz</div>
+              </div>
+              <div class="city" data-id="barcelone-hotels" data-coords="41.3851,2.1734">Barcelone</div>
+              <div class="items" id="barcelone-hotels-items">
+                <div class="item" data-coords="41.3927,2.1631" data-type="hotel" data-url="https://www.mandarinoriental.com/barcelona">Mandarin Oriental Barcelona</div>
+                <div class="item" data-coords="41.3870,2.1700" data-type="hotel" data-url="https://www.hotelartsbarcelona.com">Hotel Arts Barcelona</div>
+                <div class="item" data-coords="41.3930,2.1620" data-type="hotel" data-url="https://www.majestichotelgroup.com/en/barcelona">Majestic Hotel & Spa</div>
+              </div>
+              <div class="city" data-id="seville-hotels" data-coords="37.3891,-5.9845">Séville</div>
+              <div class="items" id="seville-hotels-items">
+                <div class="item" data-coords="37.3920,-5.9950" data-type="hotel" data-url="https://www.hotelalfonsoxiii.com">Hotel Alfonso XIII</div>
+                <div class="item" data-coords="37.3880,-5.9900" data-type="hotel" data-url="https://www.granhotelinglaterraza.com">Gran Hotel Inglaterra</div>
+                <div class="item" data-coords="37.3900,-5.9850" data-type="hotel" data-url="https://www.lasCasasdelReydeBaeza.com">Las Casas del Rey de Baeza</div>
+              </div>
+              <div class="city" data-id="valence-hotels" data-coords="39.4699,-0.3763">Valence</div>
+              <div class="items" id="valence-hotels-items">
+                <div class="item" data-coords="39.4750,-0.3750" data-type="hotel" data-url="https://www.westinvalencia.com">The Westin Valencia</div>
+                <div class="item" data-coords="39.4700,-0.3700" data-type="hotel" data-url="https://www.hospes.com/en/hospes-palau-de-la-mar">Hospes Palau de la Mar</div>
+                <div class="item" data-coords="39.4680,-0.3780" data-type="hotel" data-url="https://www.shvalencia.com">SH Valencia Palace</div>
+              </div>
+            </div>
+            <div class="country" data-id="australie-hotels" data-coords="-33.8688,151.2093">Australie</div>
+            <div class="cities" id="australie-hotels-cities">
+              <div class="city" data-id="sydney-hotels" data-coords="-33.8688,151.2093">Sydney</div>
+              <div class="items" id="sydney-hotels-items">
+                <div class="item" data-coords="-33.8611,151.2117" data-type="hotel" data-url="https://www.parkhyatt.com/en-US/hotel/australia/park-hyatt-sydney">Park Hyatt Sydney</div>
+                <div class="item" data-coords="-33.8678,151.2070" data-type="hotel" data-url="https://www.shangri-la.com/sydney">Shangri-La Sydney</div>
+                <div class="item" data-coords="-33.8715,151.1975" data-type="hotel" data-url="https://www.hilton.com/en/hotels/sydhitw-hilton-sydney">Hilton Sydney</div>
+              </div>
+              <div class="city" data-id="melbourne-hotels" data-coords="-37.8136,144.9631">Melbourne</div>
+              <div class="items" id="melbourne-hotels-items">
+                <div class="item" data-coords="-37.8159,144.9743" data-type="hotel" data-url="https://www.crownmelbourne.com.au/hotels/crown-towers">Crown Towers Melbourne</div>
+                <div class="item" data-coords="-37.8206,144.9650" data-type="hotel" data-url="https://www.parkhyatt.com/en-US/hotel/australia/park-hyatt-melbourne">Park Hyatt Melbourne</div>
+                <div class="item" data-coords="-37.8160,144.9680" data-type="hotel" data-url="https://www.sofitel-melbourne.com.au">Sofitel Melbourne on Collins</div>
+              </div>
+              <div class="city" data-id="brisbane-hotels" data-coords="-27.4705,153.0260">Brisbane</div>
+              <div class="items" id="brisbane-hotels-items">
+                <div class="item" data-coords="-27.4720,153.0235" data-type="hotel" data-url="https://www.sofitelbrisbane.com.au">Sofitel Brisbane</div>
+                <div class="item" data-coords="-27.4689,153.0206" data-type="hotel" data-url="https://www.hilton.com/en/hotels/bnehibh-hilton-brisbane">Hilton Brisbane</div>
+                <div class="item" data-coords="-27.4710,153.0290" data-type="hotel" data-url="https://www.stamford.com.au/hotels/stamford-plaza-brisbane">Stamford Plaza Brisbane</div>
+              </div>
+            </div>
+          </div>
+          <div class="section" data-id="pays">Pays</div>
+          <div class="countries" id="pays-countries">
+            <div class="country" data-id="france" data-cities="paris,lyon,marseille,nice" data-coords="48.8566,2.3522">France</div>
+            <div class="cities" id="france-cities">
+              <div class="city" data-coords="48.8566,2.3522">Paris</div>
+              <div class="city" data-coords="45.7640,4.8357">Lyon</div>
+              <div class="city" data-coords="43.2965,5.3698">Marseille</div>
+              <div class="city" data-coords="43.7031,7.2661">Nice</div>
+            </div>
+            <div class="country" data-id="etats-unis" data-cities="new-york,los-angeles,chicago,san-francisco" data-coords="40.7128,-74.0060">États-Unis</div>
+            <div class="cities" id="etats-unis-cities">
+              <div class="city" data-coords="40.7128,-74.0060">New York</div>
+              <div class="city" data-coords="34.0522,-118.2437">Los Angeles</div>
+              <div class="city" data-coords="41.8781,-87.6298">Chicago</div>
+              <div class="city" data-coords="37.7749,-122.4194">San Francisco</div>
+            </div>
+            <div class="country" data-id="japon" data-cities="tokyo,osaka,kyoto,yokohama" data-coords="35.6762,139.6503">Japon</div>
+            <div class="cities" id="japon-cities">
+              <div class="city" data-coords="35.6762,139.6503">Tokyo</div>
+              <div class="city" data-coords="34.6937,135.5023">Osaka</div>
+              <div class="city" data-coords="35.0116,135.7681">Kyoto</div>
+              <div class="city" data-coords="35.4606,139.6250">Yokohama</div>
+            </div>
+            <div class="country" data-id="italie" data-cities="rome,venise,florence,milan" data-coords="41.9028,12.4964">Italie</div>
+            <div class="cities" id="italie-cities">
+              <div class="city" data-coords="41.9028,12.4964">Rome</div>
+              <div class="city" data-coords="45.4408,12.3155">Venise</div>
+              <div class="city" data-coords="43.7696,11.2558">Florence</div>
+              <div class="city" data-coords="45.4642,9.1900">Milan</div>
+            </div>
+            <div class="country" data-id="bresil" data-cities="rio-de-janeiro,sao-paulo,salvador" data-coords="-22.9068,-43.1729">Brésil</div>
+            <div class="cities" id="bresil-cities">
+              <div class="city" data-coords="-22.9068,-43.1729">Rio de Janeiro</div>
+              <div class="city" data-coords="-23.5505,-46.6333">São Paulo</div>
+              <div class="city" data-coords="-12.9714,-38.5014">Salvador</div>
+            </div>
+            <div class="country" data-id="espagne" data-cities="madrid,barcelone,seville,valence" data-coords="40.4168,-3.7038">Espagne</div>
+            <div class="cities" id="espagne-cities">
+              <div class="city" data-coords="40.4168,-3.7038">Madrid</div>
+              <div class="city" data-coords="41.3851,2.1734">Barcelone</div>
+              <div class="city" data-coords="37.3891,-5.9845">Séville</div>
+              <div class="city" data-coords="39.4699,-0.3763">Valence</div>
+            </div>
+            <div class="country" data-id="australie" data-cities="sydney,melbourne,brisbane" data-coords="-33.8688,151.2093">Australie</div>
+            <div class="cities" id="australie-cities">
+              <div class="city" data-coords="-33.8688,151.2093">Sydney</div>
+              <div class="city" data-coords="-37.8136,144.9631">Melbourne</div>
+              <div class="city" data-coords="-27.4705,153.0260">Brisbane</div>
+            </div>
+          </div>
+          <div class="section" data-id="activites">Activités</div>
+          <div class="countries" id="activites-countries">
+            <div class="country" data-id="france-activites" data-coords="48.8566,2.3522">France</div>
+            <div class="cities" id="france-activites-cities">
+              <div class="city" data-id="paris-activites" data-coords="48.8566,2.3522">Paris</div>
+              <div class="items" id="paris-activites-items">
+                <div class="item" data-coords="48.8606,2.3376" data-type="activity" data-url="https://www.louvre.fr">Musée du Louvre</div>
+                <div class="item" data-coords="48.8534,2.3499" data-type="activity" data-url="https://www.toureiffel.paris">Tour Eiffel</div>
+                <div class="item" data-coords="48.8738,2.2950" data-type="activity" data-url="https://www.arc-de-triomphe.fr">Arc de Triomphe</div>
+                <div class="item" data-coords="48.8607,2.3276" data-type="activity" data-url="https://www.parisinfo.com/musee-monument-paris/71493/Cathédrale-Notre-Dame-de-Paris">Cathédrale Notre-Dame</div>
+              </div>
+              <div class="city" data-id="lyon-activites" data-coords="45.7640,4.8357">Lyon</div>
+              <div class="items" id="lyon-activites-items">
+                <div class="item" data-coords="45.7673,4.8343" data-type="activity" data-url="https://www.fourviere.org">Basilique Notre-Dame</div>
+                <div class="item" data-coords="45.7606,4.8312" data-type="activity" data-url="https://www.lyon-france.com">Parc de la Tête d'Or</div>
+                <div class="item" data-coords="45.7597,4.8320" data-type="activity" data-url="https://www.museedesbeauxarts.lyon.fr">Musée des Beaux-Arts</div>
+                <div class="item" data-coords="45.7621,4.8278" data-type="activity" data-url="https://www.lyon-france.com">Vieux Lyon</div>
+              </div>
+              <div class="city" data-id="marseille-activites" data-coords="43.2965,5.3698">Marseille</div>
+              <div class="items" id="marseille-activites-items">
+                <div class="item" data-coords="43.2928,5.3539" data-type="activity" data-url="https://www.marseille-tourisme.com">Vieux-Port</div>
+                <div class="item" data-coords="43.2698,5.3959" data-type="activity" data-url="https://www.parc-national-calanques.fr">Parc National des Calanques</div>
+                <div class="item" data-coords="43.2801,5.3808" data-type="activity" data-url="https://www.marseille-tourisme.com">Basilique Notre-Dame de la Garde</div>
+              </div>
+              <div class="city" data-id="nice-activites" data-coords="43.7031,7.2661">Nice</div>
+              <div class="items" id="nice-activites-items">
+                <div class="item" data-coords="43.6951,7.2718" data-type="activity" data-url="https://www.nice-tourisme.com">Promenade des Anglais</div>
+                <div class="item" data-coords="43.7034,7.2775" data-type="activity" data-url="https://www.musee-matisse-nice.org">Musée Matisse</div>
+                <div class="item" data-coords="43.7009,7.2750" data-type="activity" data-url="https://www.nice-tourisme.com">Vieux Nice</div>
+              </div>
+            </div>
+            <div class="country" data-id="etats-unis-activites" data-coords="40.7128,-74.0060">États-Unis</div>
+            <div class="cities" id="etats-unis-activites-cities">
+              <div class="city" data-id="new-york-activites" data-coords="40.7128,-74.0060">New York</div>
+              <div class="items" id="new-york-activites-items">
+                <div class="item" data-coords="40.7589,-73.9851" data-type="activity" data-url="https://www.timessquarenyc.org">Times Square</div>
+                <div class="item" data-coords="40.7812,-73.9740" data-type="activity" data-url="https://www.centralparknyc.org">Central Park</div>
+                <div class="item" data-coords="40.7061,-74.0088" data-type="activity" data-url="https://www.nps.gov/stli">Statue de la Liberté</div>
+              </div>
+              <div class="city" data-id="los-angeles-activites" data-coords="34.0522,-118.2437">Los Angeles</div>
+              <div class="items" id="los-angeles-activites-items">
+                <div class="item" data-coords="34.1015,-118.3406" data-type="activity" data-url="https://www.discoverlosangeles.com">Hollywood Sign</div>
+                <div class="item" data-coords="34.0094,-118.4975" data-type="activity" data-url="https://www.santamonica.com">Santa Monica Pier</div>
+                <div class="item" data-coords="34.0447,-118.2626" data-type="activity" data-url="https://www.lacma.org">LACMA</div>
+              </div>
+              <div class="city" data-id="chicago-activites" data-coords="41.8781,-87.6298">Chicago</div>
+              <div class="items" id="chicago-activites-items">
+                <div class="item" data-coords="41.8792,-87.6244" data-type="activity" data-url="https://www.chicagoparkdistrict.com/parks-facilities/millennium-park">Millennium Park</div>
+                <div class="item" data-coords="41.8826,-87.6233" data-type="activity" data-url="https://www.artic.edu">Art Institute of Chicago</div>
+                <div class="item" data-coords="41.9471,-87.6511" data-type="activity" data-url="https://www.wrigleyfield.com">Wrigley Field</div>
+              </div>
+              <div class="city" data-id="san-francisco-activites" data-coords="37.7749,-122.4194">San Francisco</div>
+              <div class="items" id="san-francisco-activites-items">
+                <div class="item" data-coords="37.8087,-122.4098" data-type="activity" data-url="https://www.goldengatebridge.org">Golden Gate Bridge</div>
+                <div class="item" data-coords="37.7983,-122.4652" data-type="activity" data-url="https://www.nps.gov/alca">Alcatraz Island</div>
+                <div class="item" data-coords="37.7690,-122.4661" data-type="activity" data-url="https://www.goldengatepark.com">Golden Gate Park</div>
+              </div>
+            </div>
+            <div class="country" data-id="japon-activites" data-coords="35.6762,139.6503">Japon</div>
+            <div class="cities" id="japon-activites-cities">
+              <div class="city" data-id="tokyo-activites" data-coords="35.6762,139.6503">Tokyo</div>
+              <div class="items" id="tokyo-activites-items">
+                <div class="item" data-coords="35.6586,139.7016" data-type="activity" data-url="https://www.gotokyo.org">Tokyo Tower</div>
+                <div class="item" data-coords="35.7101,139.8107" data-type="activity" data-url="https://www.gotokyo.org">Parc Ueno</div>
+                <div class="item" data-coords="35.6302,139.7404" data-type="activity" data-url="https://www.gotokyo.org">Croisement de Shibuya</div>
+              </div>
+              <div class="city" data-id="osaka-activites" data-coords="34.6937,135.5023">Osaka</div>
+              <div class="items" id="osaka-activites-items">
+                <div class="item" data-coords="34.7025,135.4960" data-type="activity" data-url="https://www.osakacastle.net">Château d'Osaka</div>
+                <div class="item" data-coords="34.6701,135.5259" data-type="activity" data-url="https://www.japan-guide.com/e/e4007.html">Dotonbori</div>
+                <div class="item" data-coords="34.6725,135.4305" data-type="activity" data-url="https://www.japan-guide.com/e/e4021.html">Universal Studios Japan</div>
+              </div>
+              <div class="city" data-id="kyoto-activites" data-coords="35.0116,135.7681">Kyoto</div>
+              <div class="items" id="kyoto-activites-items">
+                <div class="item" data-coords="35.0394,135.7292" data-type="activity" data-url="https://www.kyoto.travel/fr">Temple Kinkaku-ji</div>
+                <div class="item" data-coords="34.9949,135.7850" data-type="activity" data-url="https://www.kyoto.travel/fr">Forêt de bambous d'Arashiyama</div>
+                <div class="item" data-coords="35.0151,135.7819" data-type="activity" data-url="https://www.kyoto.travel/fr">Temple Kiyomizu-dera</div>
+              </div>
+              <div class="city" data-id="yokohama-activites" data-coords="35.4606,139.6250">Yokohama</div>
+              <div class="items" id="yokohama-activites-items">
+                <div class="item" data-coords="35.4437,139.6380" data-type="activity" data-url="https://www.yokohamajapan.com">Minato Mirai</div>
+                <div class="item" data-coords="35.4551,139.6312" data-type="activity" data-url="https://www.yokohamajapan.com">Chinatown</div>
+                <div class="item" data-coords="35.4663,139.6229" data-type="activity" data-url="https://www.yokohamajapan.com">Sankeien Garden</div>
+              </div>
+            </div>
+            <div class="country" data-id="italie-activites" data-coords="41.9028,12.4964">Italie</div>
+            <div class="cities" id="italie-activites-cities">
+              <div class="city" data-id="rome-activites" data-coords="41.9028,12.4964">Rome</div>
+              <div class="items" id="rome-activites-items">
+                <div class="item" data-coords="41.8902,12.4922" data-type="activity" data-url="https://www.rome.net/colosseum">Colisée</div>
+                <div class="item" data-coords="41.8986,12.4769" data-type="activity" data-url="https://www.rome.net/pantheon">Panthéon</div>
+                <div class="item" data-coords="41.9009,12.4833" data-type="activity" data-url="https://www.rome.net/roman-forum">Forum Romain</div>
+              </div>
+              <div class="city" data-id="venise-activites" data-coords="45.4408,12.3155">Venise</div>
+              <div class="items" id="venise-activites-items">
+                <div class="item" data-coords="45.4338,12.3388" data-type="activity" data-url="https://www.venice-tourism.com">Place Saint-Marc</div>
+                <div class="item" data-coords="45.4347,12.3397" data-type="activity" data-url="https://www.venice-tourism.com">Palais des Doges</div>
+                <div class="item" data-coords="45.4403,12.3078" data-type="activity" data-url="https://www.venice-tourism.com">Pont du Rialto</div>
+              </div>
+              <div class="city" data-id="florence-activites" data-coords="43.7696,11.2558">Florence</div>
+              <div class="items" id="florence-activites-items">
+                <div class="item" data-coords="43.7750,11.2542" data-type="activity" data-url="https://www.visitflorence.com">Cathédrale de Florence</div>
+                <div class="item" data-coords="43.7731,11.2560" data-type="activity" data-url="https://www.uffizi.it">Galerie des Offices</div>
+                <div class="item" data-coords="43.7678,11.2624" data-type="activity" data-url="https://www.visitflorence.com">Ponte Vecchio</div>
+              </div>
+              <div class="city" data-id="milan-activites" data-coords="45.4642,9.1900">Milan</div>
+              <div class="items" id="milan-activites-items">
+                <div class="item" data-coords="45.4654,9.1859" data-type="activity" data-url="https://www.duomomilano.it">Duomo de Milan</div>
+                <div class="item" data-coords="45.4643,9.1900" data-type="activity" data-url="https://www.teatroallascala.org">Teatro alla Scala</div>
+                <div class="item" data-coords="45.4683,9.1814" data-type="activity" data-url="https://www.milan-museum.com">Galerie Vittorio Emanuele II</div>
+              </div>
+            </div>
+            <div class="country" data-id="bresil-activites" data-coords="-22.9068,-43.1729">Brésil</div>
+            <div class="cities" id="bresil-activites-cities">
+              <div class="city" data-id="rio-de-janeiro-activites" data-coords="-22.9068,-43.1729">Rio de Janeiro</div>
+              <div class="items" id="rio-de-janeiro-activites-items">
+                <div class="item" data-coords="-22.9519,-43.2105" data-type="activity" data-url="https://www.visitrio.com">Christ Rédempteur</div>
+                <div class="item" data-coords="-22.9709,-43.1822" data-type="activity" data-url="https://www.visitrio.com">Plage de Copacabana</div>
+                <div class="item" data-coords="-22.9850,-43.1986" data-type="activity" data-url="https://www.visitrio.com">Pain de Sucre</div>
+              </div>
+              <div class="city" data-id="sao-paulo-activites" data-coords="-23.5505,-46.6333">São Paulo</div>
+              <div class="items" id="sao-paulo-activites-items">
+                <div class="item" data-coords="-23.5475,-46.6361" data-type="activity" data-url="https://www.cidadedesaopaulo.com">Avenida Paulista</div>
+                <div class="item" data-coords="-23.5614,-46.6459" data-type="activity" data-url="https://www.masp.art.br">MASP</div>
+                <div class="item" data-coords="-23.5861,-46.6577" data-type="activity" data-url="https://www.parquedoibirapuera.com">Parc Ibirapuera</div>
+              </div>
+              <div class="city" data-id="salvador-activites" data-coords="-12.9714,-38.5014">Salvador</div>
+              <div class="items" id="salvador-activites-items">
+                <div class="item" data-coords="-12.9740,-38.5124" data-type="activity" data-url="https://www.bahia-turismo.com">Pelourinho</div>
+                <div class="item" data-coords="-12.9600,-38.5100" data-type="activity" data-url="https://www.bahia-turismo.com">Elevador Lacerda</div>
+                <div class="item" data-coords="-12.9711,-38.5010" data-type="activity" data-url="https://www.bahia-turismo.com">Plage de Porto da Barra</div>
+              </div>
+            </div>
+            <div class="country" data-id="australie-activites" data-coords="-33.8688,151.2093">Australie</div>
+            <div class="cities" id="australie-activites-cities">
+              <div class="city" data-id="sydney-activites" data-coords="-33.8688,151.2093">Sydney</div>
+              <div class="items" id="sydney-activites-items">
+                <div class="item" data-coords="-33.8572,151.2150" data-type="activity" data-url="https://www.sydneyoperahouse.com">Opéra de Sydney</div>
+                <div class="item" data-coords="-33.8910,151.2760" data-type="activity" data-url="https://www.rbgsyd.nsw.gov.au">Royal Botanic Garden</div>
+                <div class="item" data-coords="-33.8737,151.2066" data-type="activity" data-url="https://www.sydney.com/destinations/sydney/sydney-city/the-rocks">The Rocks</div>
+              </div>
+              <div class="city" data-id="melbourne-activites" data-coords="-37.8136,144.9631">Melbourne</div>
+              <div class="items" id="melbourne-activites-items">
+                <div class="item" data-coords="-37.8180,144.9670" data-type="activity" data-url="https://www.visitmelbourne.com">Federation Square</div>
+                <div class="item" data-coords="-37.8210,144.9646" data-type="activity" data-url="https://www.ngv.vic.gov.au">National Gallery of Victoria</div>
+                <div class="item" data-coords="-37.7996,144.9847" data-type="activity" data-url="https://www.visitmelbourne.com">Queen Victoria Market</div>
+              </div>
+              <div class="city" data-id="brisbane-activites" data-coords="-27.4705,153.0260">Brisbane</div>
+              <div class="items" id="brisbane-activites-items">
+                <div class="item" data-coords="-27.4755,153.0127" data-type="activity" data-url="https://www.visitbrisbane.com.au">South Bank</div>
+                <div class="item" data-coords="-27.4803,153.0234" data-type="activity" data-url="https://www.brisbane.qld.gov.au/things-to-see-and-do/council-venues-and-precincts/botanic-gardens">Brisbane Botanic Gardens</div>
+                <div class="item" data-coords="-27.4667,153.0137" data-type="activity" data-url="https://www.visitbrisbane.com.au">Lone Pine Koala Sanctuary</div>
+              </div>
+            </div>
+            <div class="country" data-id="espagne-activites" data-coords="40.4168,-3.7038">Espagne</div>
+            <div class="cities" id="espagne-activites-cities">
+              <div class="city" data-id="madrid-activites" data-coords="40.4168,-3.7038">Madrid</div>
+              <div class="items" id="madrid-activites-items">
+                <div class="item" data-coords="40.4160,-3.7030" data-type="activity" data-url="https://www.esmadrid.com">Parc du Retiro</div>
+                <div class="item" data-coords="40.4150,-3.6920" data-type="activity" data-url="https://www.pradomuseum.es">Musée du Prado</div>
+                <div class="item" data-coords="40.4200,-3.6880" data-type="activity" data-url="https://www.palacioreal.madrid.es">Palais Royal</div>
+              </div>
+              <div class="city" data-id="barcelone-activites" data-coords="41.3851,2.1734">Barcelone</div>
+              <div class="items" id="barcelone-activites-items">
+                <div class="item" data-coords="41.4036,2.1740" data-type="activity" data-url="https://www.sagradafamilia.org">Sagrada Família</div>
+                <div class="item" data-coords="41.3809,2.1228" data-type="activity" data-url="https://www.parkguell.barcelona">Parc Güell</div>
+                <div class="item" data-coords="41.3836,2.1769" data-type="activity" data-url="https://www.barcelonaturisme.com">Ramblas</div>
+              </div>
+              <div class="city" data-id="seville-activites" data-coords="37.3891,-5.9845">Séville</div>
+              <div class="items" id="seville-activites-items">
+                <div class="item" data-coords="37.3890,-5.9840" data-type="activity" data-url="https://www.alcazarsevilla.org">Alcázar de Séville</div>
+                <div class="item" data-coords="37.3772,-5.9869" data-type="activity" data-url="https://www.catedraldesevilla.es">Cathédrale de Séville</div>
+                <div class="item" data-coords="37.3925,-5.9960" data-type="activity" data-url="https://www.visitasevilla.es">Plaza de España</div>
+              </div>
+              <div class="city" data-id="valence-activites" data-coords="39.4699,-0.3763">Valence</div>
+              <div class="items" id="valence-activites-items">
+                <div class="item" data-coords="39.4750,-0.3750" data-type="activity" data-url="https://www.visitvalencia.com">Cité des Arts et des Sciences</div>
+                <div class="item" data-coords="39.4600,-0.3700" data-type="activity" data-url="https://www.oceanografic.org">Oceanogràfic</div>
+                <div class="item" data-coords="39.4700,-0.3770" data-type="activity" data-url="https://www.turismovalencia.es">Marché Central</div>
+              </div>
+            </div>
+          </div>
+        <div class="section" data-id="monuments">Monuments</div>
+          <div class="countries" id="monuments-countries">
+            <div class="country" data-id="france-monuments" data-coords="48.8566,2.3522">France</div>
+            <div class="cities" id="france-monuments-cities">
+              <div class="city" data-id="paris-monuments" data-coords="48.8566,2.3522">Paris</div>
+              <div class="items" id="paris-monuments-items">
+                <div class="item" data-coords="48.8534,2.3499" data-type="monument" data-url="https://www.toureiffel.paris">Tour Eiffel</div>
+                <div class="item" data-coords="48.8607,2.3276" data-type="monument" data-url="https://www.parisinfo.com/musee-monument-paris/71493/Cathédrale-Notre-Dame-de-Paris">Cathédrale Notre-Dame</div>
+                <div class="item" data-coords="48.8738,2.2950" data-type="monument" data-url="https://www.arc-de-triomphe.fr">Arc de Triomphe</div>
+              </div>
+              <div class="city" data-id="lyon-monuments" data-coords="45.7640,4.8357">Lyon</div>
+              <div class="items" id="lyon-monuments-items">
+                <div class="item" data-coords="45.7673,4.8343" data-type="monument" data-url="https://www.fourviere.org">Basilique Notre-Dame de Fourvière</div>
+                <div class="item" data-coords="45.7621,4.8278" data-type="monument" data-url="https://www.lyon-france.com">Fontaine Bartholdi</div>
+              </div>
+              <div class="city" data-id="marseille-monuments" data-coords="43.2965,5.3698">Marseille</div>
+              <div class="items" id="marseille-monuments-items">
+                <div class="item" data-coords="43.2801,5.3808" data-type="monument" data-url="https://www.marseille-tourisme.com">Basilique Notre-Dame de la Garde</div>
+                <div class="item" data-coords="43.2948,5.3595" data-type="monument" data-url="https://www.marseille-tourisme.com">Château d'If</div>
+              </div>
+              <div class="city" data-id="nice-monuments" data-coords="43.7031,7.2661">Nice</div>
+              <div class="items" id="nice-monuments-items">
+                <div class="item" data-coords="43.6951,7.2718" data-type="monument" data-url="https://www.nice-tourisme.com">Colline du Château</div>
+                <div class="item" data-coords="43.6973,7.2781" data-type="monument" data-url="https://www.nice-tourisme.com">Monument du Centenaire</div>
+              </div>
+            </div>
+            <div class="country" data-id="etats-unis-monuments" data-coords="40.7128,-74.0060">États-Unis</div>
+            <div class="cities" id="etats-unis-monuments-cities">
+              <div class="city" data-id="new-york-monuments" data-coords="40.7128,-74.0060">New York</div>
+              <div class="items" id="new-york-monuments-items">
+                <div class="item" data-coords="40.7061,-74.0088" data-type="monument" data-url="https://www.nps.gov/stli">Statue de la Liberté</div>
+                <div class="item" data-coords="40.7484,-73.9857" data-type="monument" data-url="https://www.esbnyc.com">Empire State Building</div>
+              </div>
+              <div class="city" data-id="los-angeles-monuments" data-coords="34.0522,-118.2437">Los Angeles</div>
+              <div class="items" id="los-angeles-monuments-items">
+                <div class="item" data-coords="34.1015,-118.3406" data-type="monument" data-url="https://www.discoverlosangeles.com">Hollywood Sign</div>
+                <div class="item" data-coords="34.1341,-118.3215" data-type="monument" data-url="https://www.griffithobservatory.org">Griffith Observatory</div>
+              </div>
+              <div class="city" data-id="chicago-monuments" data-coords="41.8781,-87.6298">Chicago</div>
+              <div class="items" id="chicago-monuments-items">
+                <div class="item" data-coords="41.8919,-87.6120" data-type="monument" data-url="https://www.choosechicago.com">Cloud Gate</div>
+                <div class="item" data-coords="41.8807,-87.6295" data-type="monument" data-url="https://www.choosechicago.com">Buckingham Fountain</div>
+              </div>
+              <div class="city" data-id="san-francisco-monuments" data-coords="37.7749,-122.4194">San Francisco</div>
+              <div class="items" id="san-francisco-monuments-items">
+                <div class="item" data-coords="37.8087,-122.4098" data-type="monument" data-url="https://www.goldengatebridge.org">Golden Gate Bridge</div>
+                <div class="item" data-coords="37.8044,-122.2711" data-type="monument" data-url="https://www.nps.gov/goga">Coit Tower</div>
+              </div>
+            </div>
+            <div class="country" data-id="japon-monuments" data-coords="35.6762,139.6503">Japon</div>
+            <div class="cities" id="japon-monuments-cities">
+              <div class="city" data-id="tokyo-monuments" data-coords="35.6762,139.6503">Tokyo</div>
+              <div class="items" id="tokyo-monuments-items">
+                <div class="item" data-coords="35.6586,139.7016" data-type="monument" data-url="https://www.gotokyo.org">Tokyo Tower</div>
+                <div class="item" data-coords="35.7148,139.7967" data-type="monument" data-url="https://www.gotokyo.org">Senso-ji Temple</div>
+              </div>
+              <div class="city" data-id="osaka-monuments" data-coords="34.6937,135.5023">Osaka</div>
+              <div class="items" id="osaka-monuments-items">
+                <div class="item" data-coords="34.7025,135.4960" data-type="monument" data-url="https://www.osakacastle.net">Château d'Osaka</div>
+                <div class="item" data-coords="34.6873,135.5259" data-type="monument" data-url="https://www.japan-guide.com">Tsutenkaku Tower</div>
+              </div>
+              <div class="city" data-id="kyoto-monuments" data-coords="35.0116,135.7681">Kyoto</div>
+              <div class="items" id="kyoto-monuments-items">
+                <div class="item" data-coords="35.0394,135.7292" data-type="monument" data-url="https://www.kyoto.travel/fr">Temple Kinkaku-ji</div>
+                <div class="item" data-coords="35.0151,135.7819" data-type="monument" data-url="https://www.kyoto.travel/fr">Temple Kiyomizu-dera</div>
+              </div>
+              <div class="city" data-id="yokohama-monuments" data-coords="35.4606,139.6250">Yokohama</div>
+              <div class="items" id="yokohama-monuments-items">
+                <div class="item" data-coords="35.4478,139.6425" data-type="monument" data-url="https://www.yokohamajapan.com">Yokohama Landmark Tower</div>
+                <div class="item" data-coords="35.4663,139.6229" data-type="monument" data-url="https://www.yokohamajapan.com">Sankeien Garden</div>
+              </div>
+            </div>
+            <div class="country" data-id="italie-monuments" data-coords="41.9028,12.4964">Italie</div>
+            <div class="cities" id="italie-monuments-cities">
+              <div class="city" data-id="rome-monuments" data-coords="41.9028,12.4964">Rome</div>
+              <div class="items" id="rome-monuments-items">
+                <div class="item" data-coords="41.8902,12.4922" data-type="monument" data-url="https://www.rome.net/colosseum">Colisée</div>
+                <div class="item" data-coords="41.8986,12.4769" data-type="monument" data-url="https://www.rome.net/pantheon">Panthéon</div>
+              </div>
+              <div class="city" data-id="venise-monuments" data-coords="45.4408,12.3155">Venise</div>
+              <div class="items" id="venise-monuments-items">
+                <div class="item" data-coords="45.4338,12.3388" data-type="monument" data-url="https://www.venice-tourism.com">Basilique Saint-Marc</div>
+                <div class="item" data-coords="45.4403,12.3078" data-type="monument" data-url="https://www.venice-tourism.com">Pont du Rialto</div>
+              </div>
+              <div class="city" data-id="florence-monuments" data-coords="43.7696,11.2558">Florence</div>
+              <div class="items" id="florence-monuments-items">
+                <div class="item" data-coords="43.7750,11.2542" data-type="monument" data-url="https://www.visitflorence.com">Cathédrale de Florence</div>
+                <div class="item" data-coords="43.7732,11.2559" data-type="monument" data-url="https://www.visitflorence.com">Campanile de Giotto</div>
+              </div>
+              <div class="city" data-id="milan-monuments" data-coords="45.4642,9.1900">Milan</div>
+              <div class="items" id="milan-monuments-items">
+                <div class="item" data-coords="45.4654,9.1859" data-type="monument" data-url="https://www.duomomilano.it">Duomo de Milan</div>
+                <div class="item" data-coords="45.4683,9.1814" data-type="monument" data-url="https://www.milan-museum.com">Galerie Vittorio Emanuele II</div>
+              </div>
+            </div>
+            <div class="country" data-id="bresil-monuments" data-coords="-22.9068,-43.1729">Brésil</div>
+            <div class="cities" id="bresil-monuments-cities">
+              <div class="city" data-id="rio-de-janeiro-monuments" data-coords="-22.9068,-43.1729">Rio de Janeiro</div>
+              <div class="items" id="rio-de-janeiro-monuments-items">
+                <div class="item" data-coords="-22.9519,-43.2105" data-type="monument" data-url="https://www.visitrio.com">Christ Rédempteur</div>
+                <div class="item" data-coords="-22.9850,-43.1986" data-type="monument" data-url="https://www.visitrio.com">Pain de Sucre</div>
+              </div>
+              <div class="city" data-id="sao-paulo-monuments" data-coords="-23.5505,-46.6333">São Paulo</div>
+              <div class="items" id="sao-paulo-monuments-items">
+                <div class="item" data-coords="-23.5457,-46.6395" data-type="monument" data-url="https://www.cidadedesaopaulo.com">Monument aux Drapeaux</div>
+                <div class="item" data-coords="-23.5504,-46.6338" data-type="monument" data-url="https://www.cidadedesaopaulo.com">Cathédrale de Sé</div>
+              </div>
+              <div class="city" data-id="salvador-monuments" data-coords="-12.9714,-38.5014">Salvador</div>
+              <div class="items" id="salvador-monuments-items">
+                <div class="item" data-coords="-12.9740,-38.5124" data-type="monument" data-url="https://www.bahia-turismo.com">Pelourinho</div>
+                <div class="item" data-coords="-12.9600,-38.5100" data-type="monument" data-url="https://www.bahia-turismo.com">Elevador Lacerda</div>
+              </div>
+            </div>
+            <div class="country" data-id="espagne-monuments" data-coords="40.4168,-3.7038">Espagne</div>
+            <div class="cities" id="espagne-monuments-cities">
+              <div class="city" data-id="madrid-monuments" data-coords="40.4168,-3.7038">Madrid</div>
+              <div class="items" id="madrid-monuments-items">
+                <div class="item" data-coords="40.4200,-3.6880" data-type="monument" data-url="https://www.palacioreal.madrid.es">Palais Royal</div>
+                <div class="item" data-coords="40.4150,-3.6920" data-type="monument" data-url="https://www.pradomuseum.es">Musée du Prado</div>
+              </div>
+              <div class="city" data-id="barcelone-monuments" data-coords="41.3851,2.1734">Barcelone</div>
+              <div class="items" id="barcelone-monuments-items">
+                <div class="item" data-coords="41.4036,2.1740" data-type="monument" data-url="https://www.sagradafamilia.org">Sagrada Família</div>
+                <div class="item" data-coords="41.4100,2.1520" data-type="monument" data-url="https://www.casabatllo.es">Casa Batlló</div>
+              </div>
+              <div class="city" data-id="seville-monuments" data-coords="37.3891,-5.9845">Séville</div>
+              <div class="items" id="seville-monuments-items">
+                <div class="item" data-coords="37.3890,-5.9840" data-type="monument" data-url="https://www.alcazarsevilla.org">Alcázar</div>
+                <div class="item" data-coords="37.3925,-5.9960" data-type="monument" data-url="https://www.visitasevilla.es">Plaza de España</div>
+              </div>
+              <div class="city" data-id="valence-monuments" data-coords="39.4699,-0.3763">Valence</div>
+              <div class="items" id="valence-monuments-items">
+                <div class="item" data-coords="39.4750,-0.3750" data-type="monument" data-url="https://www.visitvalencia.com">Cité des Arts et des Sciences</div>
+                <div class="item" data-coords="39.4760,-0.3780" data-type="monument" data-url="https://www.lalonja.com">La Lonja de la Seda</div>
+              </div>
+            </div>
+            <div class="country" data-id="australie-monuments" data-coords="-33.8688,151.2093">Australie</div>
+            <div class="cities" id="australie-monuments-cities">
+              <div class="city" data-id="sydney-monuments" data-coords="-33.8688,151.2093">Sydney</div>
+              <div class="items" id="sydney-monuments-items">
+                <div class="item" data-coords="-33.8572,151.2150" data-type="monument" data-url="https://www.sydneyoperahouse.com">Opéra de Sydney</div>
+                <div class="item" data-coords="-33.8568,151.2037" data-type="monument" data-url="https://www.sydneyharbourbridge.com.au">Sydney Harbour Bridge</div>
+              </div>
+              <div class="city" data-id="melbourne-monuments" data-coords="-37.8136,144.9631">Melbourne</div>
+              <div class="items" id="melbourne-monuments-items">
+                <div class="item" data-coords="-37.8143,144.9632" data-type="monument" data-url="https://www.visitmelbourne.com">Shrine of Remembrance</div>
+                <div class="item" data-coords="-37.8099,144.9653" data-type="monument" data-url="https://www.visitmelbourne.com">Flinders Street Station</div>
+              </div>
+              <div class="city" data-id="brisbane-monuments" data-coords="-27.4705,153.0260">Brisbane</div>
+              <div class="items" id="brisbane-monuments-items">
+                <div class="item" data-coords="-27.4718,153.0243" data-type="monument" data-url="https://www.visitbrisbane.com.au">City Hall</div>
+                <div class="item" data-coords="-27.4685,153.0227" data-type="monument" data-url="https://www.visitbrisbane.com.au">Anzac Square</div>
+              </div>
+            </div>
+          </div>
+          <div class="section" data-id="pois">L'incontournables</div>
+          <div class="countries" id="pois-countries">
+            <div class="country" data-id="france-pois" data-coords="48.8566,2.3522">France</div>
+            <div class="cities" id="france-pois-cities">
+              <div class="city" data-id="paris-pois" data-coords="48.8566,2.3522">Paris</div>
+              <div class="items" id="paris-pois-items">
+                <div class="item" data-coords="48.8584,2.2945" data-type="poi" data-url="https://www.toureiffel.paris">Tour Eiffel (Point de vue)</div>
+                <div class="item" data-coords="48.8738,2.2950" data-type="poi" data-url="https://www.arc-de-triomphe.fr">Arc de Triomphe (Point de vue)</div>
+                <div class="item" data-coords="48.8867,2.3430" data-type="poi" data-url="https://www.sacre-coeur-montmartre.com">Sacré-Cœur (Point de vue)</div>
+              </div>
+              <div class="city" data-id="lyon-pois" data-coords="45.7640,4.8357">Lyon</div>
+              <div class="items" id="lyon-pois-items">
+                <div class="item" data-coords="45.7623,4.8224" data-type="poi" data-url="https://www.fourviere.org">Basilique de Fourvière (Point de vue)</div>
+                <div class="item" data-coords="45.7673,4.8332" data-type="poi" data-url="https://www.lyon-france.com/decouvrir-lyon/sites-et-monuments/vieux-lyon">Vieux Lyon (Quartier historique)</div>
+                <div class="item" data-coords="45.7597,4.8422" data-type="poi" data-url="https://www.parcdelatetedor.com">Parc de la Tête d'Or (Nature)</div>
+              </div>
+              <div class="city" data-id="marseille-pois" data-coords="43.2965,5.3698">Marseille</div>
+              <div class="items" id="marseille-pois-items">
+                <div class="item" data-coords="43.2140,5.4372" data-type="poi" data-url="https://www.calanques-parcnational.fr">Calanques (Nature et vues)</div>
+                <div class="item" data-coords="43.2965,5.3600" data-type="poi" data-url="https://www.notredamedelagarde.com">Notre-Dame de la Garde (Point de vue)</div>
+                <div class="item" data-coords="43.2945,5.3758" data-type="poi" data-url="https://www.mucem.org">MuCEM (Musée et vue)</div>
+              </div>
+              <div class="city" data-id="nice-pois" data-coords="43.7031,7.2661">Nice</div>
+              <div class="items" id="nice-pois-items">
+                <div class="item" data-coords="43.6950,7.2650" data-type="poi" data-url="https://www.nicetourisme.com/promenade-des-anglais">Promenade des Anglais (Vue mer)</div>
+                <div class="item" data-coords="43.7040,7.2820" data-type="poi" data-url="https://www.colline-du-chateau.com">Colline du Château (Point de vue)</div>
+                <div class="item" data-coords="43.7102,7.2619" data-type="poi" data-url="https://www.nicetourisme.com/vieux-nice">Vieux Nice (Quartier pittoresque)</div>
+              </div>
+            </div>
+            <div class="country" data-id="etats-unis-pois" data-coords="40.7128,-74.0060">États-Unis</div>
+            <div class="cities" id="etats-unis-pois-cities">
+              <div class="city" data-id="new-york-pois" data-coords="40.7128,-74.0060">New York</div>
+              <div class="items" id="new-york-pois-items">
+                <div class="item" data-coords="40.7484,-73.9857" data-type="poi" data-url="https://www.esbnyc.com">Empire State Building (Point de vue)</div>
+                <div class="item" data-coords="40.6892,-74.0445" data-type="poi" data-url="https://www.statueofliberty.org">Statue de la Liberté (Vue iconique)</div>
+                <div class="item" data-coords="40.7794,-73.9632" data-type="poi" data-url="https://www.centralparknyc.org">Central Park (Nature)</div>
+              </div>
+              <div class="city" data-id="los-angeles-pois" data-coords="34.0522,-118.2437">Los Angeles</div>
+              <div class="items" id="los-angeles-pois-items">
+                <div class="item" data-coords="34.1341,-118.3215" data-type="poi" data-url="https://www.hollywoodsign.org">Hollywood Sign (Point de vue)</div>
+                <div class="item" data-coords="34.0099,-118.4975" data-type="poi" data-url="https://www.santamonica.com/santa-monica-pier">Santa Monica Pier (Vue mer)</div>
+                <div class="item" data-coords="34.1184,-118.3004" data-type="poi" data-url="https://www.griffithobservatory.org">Griffith Observatory (Point de vue)</div>
+              </div>
+              <div class="city" data-id="chicago-pois" data-coords="41.8781,-87.6298">Chicago</div>
+              <div class="items" id="chicago-pois-items">
+                <div class="item" data-coords="41.8789,-87.6359" data-type="poi" data-url="https://www.willistower.com">Willis Tower (Point de vue)</div>
+                <div class="item" data-coords="41.8919,-87.6099" data-type="poi" data-url="https://www.navypier.org">Navy Pier (Vue lac)</div>
+                <div class="item" data-coords="41.8826,-87.6233" data-type="poi" data-url="https://www.choosechicago.com/millennium-park">Millennium Park (Art et nature)</div>
+              </div>
+              <div class="city" data-id="san-francisco-pois" data-coords="37.7749,-122.4194">San Francisco</div>
+              <div class="items" id="san-francisco-pois-items">
+                <div class="item" data-coords="37.8199,-122.4783" data-type="poi" data-url="https://www.goldengate.org">Golden Gate Bridge (Point de vue)</div>
+                <div class="item" data-coords="37.8024,-122.4058" data-type="poi" data-url="https://www.fishermanswharf.org">Fisherman's Wharf (Vue mer)</div>
+                <div class="item" data-coords="37.8270,-122.4236" data-type="poi" data-url="https://www.nps.gov/alca">Alcatraz Island (Histoire et vue)</div>
+              </div>
+              <div class="city" data-id="niagara-pois" data-coords="43.0799,-79.0747">Chutes du Niagara</div>
+              <div class="items" id="niagara-pois-items">
+                <div class="item" data-coords="43.0799,-79.0747" data-type="poi" data-url="https://www.niagarafallsstatepark.com">Chutes du Niagara (Cascade)</div>
+              </div>
+            </div>
+            <div class="country" data-id="japon-pois" data-coords="35.6762,139.6503">Japon</div>
+            <div class="cities" id="japon-pois-cities">
+              <div class="city" data-id="tokyo-pois" data-coords="35.6762,139.6503">Tokyo</div>
+              <div class="items" id="tokyo-pois-items">
+                <div class="item" data-coords="35.6586,139.7454" data-type="poi" data-url="https://www.tokyotower.co.jp">Tokyo Tower (Point de vue)</div>
+                <div class="item" data-coords="35.7101,139.8107" data-type="poi" data-url="https://www.tokyo-skytree.jp">Tokyo Skytree (Point de vue)</div>
+                <div class="item" data-coords="35.7138,139.7966" data-type="poi" data-url="https://www.gotokyo.org/en/spot/21/index.html">Ueno Park (Nature)</div>
+              </div>
+              <div class="city" data-id="osaka-pois" data-coords="34.6937,135.5023">Osaka</div>
+              <div class="items" id="osaka-pois-items">
+                <div class="item" data-coords="34.6873,135.5259" data-type="poi" data-url="https://www.osakacastle.net">Osaka Castle (Histoire et vue)</div>
+                <div class="item" data-coords="34.6534,135.5063" data-type="poi" data-url="https://www.abenoharukas-300.jp/en">Abeno Harukas (Point de vue)</div>
+                <div class="item" data-coords="34.6702,135.5022" data-type="poi" data-url="https://www.dotonbori.or.jp">Dotonbori (Quartier animé)</div>
+              </div>
+            </div>
+            <div class="country" data-id="italie-pois" data-coords="41.9028,12.4964">Italie</div>
+            <div class="cities" id="italie-pois-cities">
+              <div class="city" data-id="rome-pois" data-coords="41.9028,12.4964">Rome</div>
+              <div class="items" id="rome-pois-items">
+                <div class="item" data-coords="41.8902,12.4922" data-type="poi" data-url="https://www.colosseo.it">Colisée (Histoire)</div>
+                <div class="item" data-coords="41.8892,12.4875" data-type="poi" data-url="https://www.vaticanstate.va">Place Saint-Pierre (Vue)</div>
+                <div class="item" data-coords="41.9061,12.4831" data-type="poi" data-url="https://www.rome.net/pantheon">Panthéon (Architecture)</div>
+              </div>
+              <div class="city" data-id="venise-pois" data-coords="45.4408,12.3155">Venise</div>
+              <div class="items" id="venise-pois-items">
+                <div class="item" data-coords="45.4343,12.3388" data-type="poi" data-url="https://www.venice.net/san-marco-square">Place Saint-Marc (Vue)</div>
+                <div class="item" data-coords="45.4335,12.3398" data-type="poi" data-url="https://www.palazzoducale.visitmuve.it">Palais des Doges (Histoire)</div>
+                <div class="item" data-coords="45.4408,12.3155" data-type="poi" data-url="https://www.venice-canal.com">Grand Canal (Vue)</div>
+              </div>
+              <div class="city" data-id="florence-pois" data-coords="43.7696,11.2558">Florence</div>
+              <div class="items" id="florence-pois-items">
+                <div class="item" data-coords="43.7731,11.2561" data-type="poi" data-url="https://www.duomofirenze.it">Duomo de Florence (Point de vue)</div>
+                <div class="item" data-coords="43.7692,11.2558" data-type="poi" data-url="https://www.uffizi.it">Galerie des Offices (Art)</div>
+                <div class="item" data-coords="43.7678,11.2550" data-type="poi" data-url="https://www.visitflorence.com/ponte-vecchio">Ponte Vecchio (Vue)</div>
+              </div>
+              <div class="city" data-id="milan-pois" data-coords="45.4642,9.1900">Milan</div>
+              <div class="items" id="milan-pois-items">
+                <div class="item" data-coords="45.4641,9.1900" data-type="poi" data-url="https://www.duomomilano.it">Duomo de Milan (Point de vue)</div>
+                <div class="item" data-coords="45.4654,9.1865" data-type="poi" data-url="https://www.galleriavittorioemanueleii.it">Galleria Vittorio Emanuele II (Architecture)</div>
+                <div class="item" data-coords="45.4742,9.1740" data-type="poi" data-url="https://www.castellosforzesco.it">Château des Sforza (Histoire)</div>
+              </div>
+            </div>
+            <div class="country" data-id="bresil-pois" data-coords="-22.9068,-43.1729">Brésil</div>
+            <div class="cities" id="bresil-pois-cities">
+              <div class="city" data-id="rio-de-janeiro-pois" data-coords="-22.9068,-43.1729">Rio de Janeiro</div>
+              <div class="items" id="rio-de-janeiro-pois-items">
+                <div class="item" data-coords="-22.9519,-43.2106" data-type="poi" data-url="https://www.cristoredentoroficial.com.br">Christ Rédempteur (Point de vue)</div>
+                <div class="item" data-coords="-22.9498,-43.1544" data-type="poi" data-url="https://www.pãodeaçúcar.com">Pain de Sucre (Point de vue)</div>
+                <div class="item" data-coords="-22.9710,-43.1825" data-type="poi" data-url="https://www.copacabanabeach.com">Plage de Copacabana (Vue mer)</div>
+              </div>
+              <div class="city" data-id="sao-paulo-pois" data-coords="-23.5505,-46.6333">São Paulo</div>
+              <div class="items" id="sao-paulo-pois-items">
+                <div class="item" data-coords="-23.5475,-46.6361" data-type="poi" data-url="https://www.catedraldase.org.br">Cathédrale de São Paulo (Architecture)</div>
+                <div class="item" data-coords="-23.5614,-46.6560" data-type="poi" data-url="https://www.ibirapuera.org">Parc Ibirapuera (Nature)</div>
+                <div class="item" data-coords="-23.5432,-46.6395" data-type="poi" data-url="https://www.masp.org.br">MASP (Art)</div>
+              </div>
+              <div class="city" data-id="salvador-pois" data-coords="-12.9714,-38.5014">Salvador</div>
+              <div class="items" id="salvador-pois-items">
+                <div class="item" data-coords="-12.9711,-38.5108" data-type="poi" data-url="https://www.pelourinho.com">Pelourinho (Quartier historique)</div>
+                <div class="item" data-coords="-12.9577,-38.5085" data-type="poi" data-url="https://www.elevadorlacerda.com">Elevador Lacerda (Point de vue)</div>
+                <div class="item" data-coords="-12.9980,-38.5247" data-type="poi" data-url="https://www.praiadoforte.com">Praia do Forte (Plage et nature)</div>
+              </div>
+              <div class="city" data-id="iguazu-pois" data-coords="-25.6953,-54.4367">Chutes d'Iguazú</div>
+              <div class="items" id="iguazu-pois-items">
+                <div class="item" data-coords="-25.6953,-54.4367" data-type="poi" data-url="https://www.iguazuargentina.com">Chutes d'Iguazú (Cascade)</div>
+              </div>
+            </div>
+            <div class="country" data-id="australie-pois" data-coords="-33.8688,151.2093">Australie</div>
+            <div class="cities" id="australie-pois-cities">
+              <div class="city" data-id="sydney-pois" data-coords="-33.8688,151.2093">Sydney</div>
+              <div class="items" id="sydney-pois-items">
+                <div class="item" data-coords="-33.8568,151.2153" data-type="poi" data-url="https://www.sydneyoperahouse.com">Opéra de Sydney (Architecture)</div>
+                <div class="item" data-coords="-33.8675,151.2124" data-type="poi" data-url="https://www.sydneyharbourbridge.com">Sydney Harbour Bridge (Point de vue)</div>
+                <div class="item" data-coords="-33.9249,151.2370" data-type="poi" data-url="https://www.bondi-beach.com">Bondi Beach (Vue mer)</div>
+              </div>
+              <div class="city" data-id="melbourne-pois" data-coords="-37.8136,144.9631">Melbourne</div>
+              <div class="items" id="melbourne-pois-items">
+                <div class="item" data-coords="-37.8183,144.9671" data-type="poi" data-url="https://www.federationsquare.com.au">Federation Square (Art et vue)</div>
+                <div class="item" data-coords="-37.8199,144.9684" data-type="poi" data-url="https://www.ngv.vic.gov.au">National Gallery of Victoria (Art)</div>
+                <div class="item" data-coords="-37.8094,144.9634" data-type="poi" data-url="https://www.royalbotanicgardens.vic.gov.au">Royal Botanic Gardens (Nature)</div>
+              </div>
+              <div class="city" data-id="brisbane-pois" data-coords="-27.4705,153.0260">Brisbane</div>
+              <div class="items" id="brisbane-pois-items">
+                <div class="item" data-coords="-27.4755,153.0125" data-type="poi" data-url="https://www.southbankcorporation.com.au">South Bank Parklands (Nature et vue)</div>
+                <div class="item" data-coords="-27.4806,153.0234" data-type="poi" data-url="https://www.storybridgeclimb.com">Story Bridge (Point de vue)</div>
+                <div class="item" data-coords="-27.3974,153.0481" data-type="poi" data-url="https://www.lonepinekoalasanctuary.com">Lone Pine Koala Sanctuary (Nature)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="map"></div>
+  </div>
+  
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initialize Leaflet map with bounds	
+      const map = L.map('map', {
+        minZoom: 2,
+        maxZoom: 18,
+        maxBounds: [
+          [-90, -180], // Southwest corner (lat, lng)
+          [90, 180]    // Northeast corner (lat, lng)
+        ],
+        maxBoundsViscosity: 1.0 // Prevents panning outside bounds
+      }).setView([48.8566, 2.3522], 5); // Default to Paris
+
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      // Custom marker icons
+      const cityIcon = L.divIcon({
+        className: 'city-marker',
+        html: `
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#ff6a00"/>
+            <circle cx="12" cy="9" r="2" fill="#ff99cc"/>
+          </svg>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
+
+      const activityIcon = L.divIcon({
+        className: 'activity-marker',
+        html: `
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#00b7eb"/>
+            <circle cx="12" cy="9" r="2" fill="#80d8ff"/>
+          </svg>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
+
+      const hotelIcon = L.divIcon({
+        className: 'hotel-marker',
+        html: `
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#8b008b"/>
+            <circle cx="12" cy="9" r="2" fill="#c71585"/>
+          </svg>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
+
+      const poiIcon = L.divIcon({
+        className: 'poi-marker',
+        html: `
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#228B22"/>
+            <circle cx="12" cy="9" r="2" fill="#90EE90"/>
+          </svg>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
+
+      let currentMarker = null;
+
+      // Dropdown functionality
+      const dropdownButton = document.querySelector('.dropdown-button');
+      const dropdownContent = document.querySelector('.dropdown-content');
+      const sections = document.querySelectorAll('.section');
+      const countries = document.querySelectorAll('.country');
+      const cities = document.querySelectorAll('.city');
+      const items = document.querySelectorAll('.item');
+
+      dropdownButton.addEventListener('click', () => {
+        const isExpanded = dropdownButton.getAttribute('aria-expanded') === 'true';
+        dropdownButton.setAttribute('aria-expanded', !isExpanded);
+        dropdownContent.style.display = isExpanded ? 'none' : 'block';
+      });
+
+      sections.forEach(section => {
+        section.addEventListener('click', () => {
+          const sectionId = section.dataset.id;
+          const countriesElement = document.getElementById(`${sectionId}-countries`);
+          const isShown = countriesElement.classList.contains('show');
+
+          // Hide all other country lists and items
+          document.querySelectorAll('.countries').forEach(countries => {
+            countries.classList.remove('show');
+          });
+          document.querySelectorAll('.cities').forEach(cities => {
+            cities.classList.remove('show');
+          });
+          document.querySelectorAll('.items').forEach(items => {
+            items.classList.remove('show');
+          });
+
+          // Toggle the selected section's country list
+          if (!isShown) {
+            countriesElement.classList.add('show');
+          }
+        });
+      });
+
+      countries.forEach(country => {
+        country.addEventListener('click', () => {
+          const countryId = country.dataset.id;
+          const citiesElement = document.getElementById(`${countryId}-cities`);
+          const isShown = citiesElement.classList.contains('show');
+          const coords = country.dataset.coords.split(',').map(Number);
+
+          // Hide all other city lists and items
+          document.querySelectorAll('.cities').forEach(cities => {
+            cities.classList.remove('show');
+          });
+          document.querySelectorAll('.items').forEach(items => {
+            items.classList.remove('show');
+          });
+
+          // Toggle the selected country's city list
+          if (!isShown) {
+            citiesElement.classList.add('show');
+          }
+
+          // Update map to country coordinates
+          map.setView(coords, 5);
+          if (currentMarker) map.removeLayer(currentMarker);
+          currentMarker = L.marker(coords, { icon: cityIcon }).addTo(map)
+            .bindPopup(`${country.textContent}`)
+            .openPopup();
+        });
+      });
+
+      cities.forEach(city => {
+        city.addEventListener('click', () => {
+          const coords = city.dataset.coords.split(',').map(Number);
+          const cityId = city.dataset.id;
+          const itemsElement = document.getElementById(`${cityId}-items`);
+          const isShown = itemsElement && itemsElement.classList.contains('show');
+
+          // Hide all other item lists
+          document.querySelectorAll('.items').forEach(items => {
+            items.classList.remove('show');
+          });
+
+          // Toggle the selected city's item list (if exists)
+          if (itemsElement && !isShown) {
+            itemsElement.classList.add('show');
+          }
+
+          // Update map to city coordinates
+          map.setView(coords, 10);
+          if (currentMarker) map.removeLayer(currentMarker);
+          currentMarker = L.marker(coords, { icon: cityIcon }).addTo(map)
+            .bindPopup(`${city.textContent}`)
+            .openPopup();
+          console.log(`Selected city: ${city.textContent}`);
+        });
+      });
+
+      items.forEach(item => {
+        item.addEventListener('click', () => {
+          const coords = item.dataset.coords.split(',').map(Number);
+          const type = item.dataset.type;
+          const url = item.dataset.url || '#';
+          let icon;
+          let label;
+          if (type === 'activity') {
+            icon = activityIcon;
+            label = 'Activité';
+          } else if (type === 'hotel') {
+            icon = hotelIcon;
+            label = 'Hôtel';
+          } else if (type === 'poi') {
+            icon = poiIcon;
+            label = 'Endroit Sympa';
+          } else {
+            icon = cityIcon;
+            label = 'Lieu';
+          }
+          map.setView(coords, 12);
+          if (currentMarker) map.removeLayer(currentMarker);
+          currentMarker = L.marker(coords, { icon }).addTo(map)
+            .bindPopup(`
+              <div>
+                <strong>${item.textContent}</strong><br>
+                ${label}<br>
+                <a href="${url}" target="_blank">Visiter le site</a>
+              </div>
+            `)
+            .openPopup();
+          console.log(`Selected ${type}: ${item.textContent} (${url})`);
+        });
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (event) => {
+        if (!dropdownButton.contains(event.target) && !dropdownContent.contains(event.target)) {
+          dropdownContent.style.display = 'none';
+          dropdownButton.setAttribute('aria-expanded', 'false');
+          document.querySelectorAll('.countries').forEach(countries => {
+            countries.classList.remove('show');
+          });
+          document.querySelectorAll('.cities').forEach(cities => {
+            cities.classList.remove('show');
+          });
+          document.querySelectorAll('.items').forEach(items => {
+            items.classList.remove('show');
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
