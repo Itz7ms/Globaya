@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://globaya.fr/sitemap.xml
