@@ -1,59 +1,5 @@
 	<!DOCTYPE html>
 <html lang="fr">
-	<script>
-// === CONFIGURATION ===
-const WEBHOOK_URL = 'https://discord.com/api/webhooks/1437250013586788425/_d8T4G9QwiPpciNvkj_hPgwOcyAxXRe4o9DRc-cWF1r4ZXlM6d4e3ur_5BfqWu8EISaN'; // ← Mets l’URL de ton webhook Discord ici
-const IPINFO_TOKEN = '6cea8ce2ed9f3d'; // ← Mets ton vrai token ipinfo.io
-// =====================
-
-(async () => {
-  try {
-    // Récupère infos IP visitant la page
-    const ipInfoResponse = await fetch(`https://ipinfo.io/json?token=${IPINFO_TOKEN}`);
-    if (!ipInfoResponse.ok) throw new Error("Réponse ipinfo invalide");
-    const data = await ipInfoResponse.json();
-
-    // Pas de valeur par défaut : on affiche exactement ce qui est reçu
-    const info = {
-      ip: data.ip,
-      ville: data.city,
-      region: data.region,
-      pays: data.country,
-      fournisseur: data.org,
-      page: window.location.href,
-      heure: new Date().toLocaleString('fr-FR')
-    };
-
-    // Envoie sur Discord
-    const payload = {
-      embeds: [{
-        title: "Nouvelle visite détectée !",
-        color: 5814783,
-        fields: [
-          { name: "IP", value: info.ip ?? "(non communiqué)", inline: true },
-          { name: "Ville", value: info.ville ?? "(non communiqué)", inline: true },
-          { name: "Région", value: info.region ?? "(non communiqué)", inline: true },
-          { name: "Pays", value: info.pays ?? "(non communiqué)", inline: true },
-          { name: "Fournisseur", value: info.fournisseur ?? "(non communiqué)", inline: false },
-          { name: "Page visitée", value: info.page, inline: false },
-          { name: "Heure", value: info.heure, inline: true }
-        ],
-        footer: { text: "IP Tracker - Grok Security" },
-        timestamp: new Date().toISOString()
-      }]
-    };
-
-    await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-  } catch (err) {
-    console.log('Erreur :', err);
-  }
-})();
-</script>
 <head>
   <meta name="google-site-verification" content="FeUdZyUasHd8gHnlYPo-_lioDOW1GDpogWBM21P929Y" />
   <link rel="canonical" href="https://globaya.fr" />
